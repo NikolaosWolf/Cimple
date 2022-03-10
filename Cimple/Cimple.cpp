@@ -9,8 +9,6 @@
 
 using namespace std;
 
-/******************* Declarations *******************/
-
 /********************* Alphabet *********************/
 #define str_tk         1 // a, ..., z and A, ..., Z
 #define num_tk         2 // 0, ..., 9
@@ -60,6 +58,9 @@ using namespace std;
 #define input_tk    119
 #define print_tk    120
 
+/******************* Declarations *******************/
+bool is_valid_file(string fileName);
+
 /***************** Exceptions ****************/
 class CompilationException : public exception {
 private:
@@ -76,6 +77,7 @@ public:
 class LexicalAnalyst {
 private:
 	FILE* input;
+	int line;
 
 	int check_reserved(string s) {
 		if (s.compare("program") == 0)
@@ -233,6 +235,7 @@ private:
 public:
 	LexicalAnalyst(FILE* file) {
 		input = file;
+		line = 1;
 	}
 
 	int get_token() {
@@ -241,8 +244,12 @@ public:
 
 		string buffer = "";
 
-		while (isspace(c))
+		while (isspace(c)) {
+			if (c == '\n')
+				line++;
+
 			c = getc(input);
+		}
 
 		if (isalpha(c))
 			return handle_alphanumeric(c);
@@ -314,6 +321,35 @@ public:
 
 		return 0;
 	}
+
+	bool is_rel_op(int token) {
+		if (token == eq_tk ||
+			token == lt_tk ||
+			token == le_tk ||
+			token == gt_tk ||
+			token == ge_tk ||
+			token == ne_tk) return true;
+
+		return false;
+	}
+
+	bool is_add_op(int token) {
+		if (token == plus_tk || token == minus_tk)
+			return true;
+
+		return false;
+	}
+
+	bool is_mul_op(int token) {
+		if (token == star_tk || token == slash_tk)
+			return true;
+
+		return false;
+	}
+
+	int get_line() {
+		return line;
+	}
 };
 
 class GrammaticalAnalyst {
@@ -327,7 +363,7 @@ private:
 		if (token != program_tk)
 			throw CompilationException("Program keyword was expected.");
 
-		return program_id();
+		program_id();
 	}
 
 	void program_id() {
@@ -339,19 +375,19 @@ private:
 		end();
 	}
 
-	void block() {
+	void block() { // returns token
 		token = lex.get_token();
 		if (token != lbr_tk)
 			throw CompilationException("Every code block must start with a left bracket.");
 
 		token = lex.get_token();
 
-		declarations();
-		sub_programs();
-		block_statements();
+		declarations(); // returns token
+		sub_programs(); // returns token
+		block_statements(); // returns token
 	}
 
-	void declarations() {
+	void declarations() { // returns token
 		while (token == declare_tk) {
 			var_list();
 
@@ -390,7 +426,7 @@ private:
 			if (token != rpar_tk)
 				throw CompilationException("A right parenthesis is expected after the parameters of a function or procedure.");
 
-			block();
+			block(); // returns token
 		}
 	}
 
@@ -421,59 +457,61 @@ private:
 			throw CompilationException("A parameter ID is expected after the in or inout keyword.");
 	}
 
-	void block_statements() {
-		statement();
+	void block_statements() { // returns token
+		statement(); // returns token
 
-		token = lex.get_token();
 		while (token == semicolon_tk) {
 			token = lex.get_token();
-			statement();
-
-			token = lex.get_token();
+			statement(); // returns token
 		}
+
+		if (token != rbr_tk)
+			throw CompilationException("A program block must be enclosed between brackets.");
+
+		token = lex.get_token();
 	}
 
-	void statement() {
+	void statement() { // returns token
 		switch (token)
 		{
 			case str_tk:
-				assign_statement();
+				assign_statement(); // returns token
 				break;
 
 			case if_tk:
-				if_statement();
+				if_statement(); // returns token
 				break;
 
 			case while_tk:
-				while_statement();
+				while_statement(); // returns token
 				break;
 
 			case switch_tk:
-				switchcase_statement();
+				switchcase_statement(); // returns token
 				break;
 
 			case forcase_tk:
-				forcase_statement();
+				forcase_statement(); // returns token
 				break;
 
 			case incase_tk:
-				incase_statement();
+				incase_statement(); // returns token
 				break;
 
 			case call_tk:
-				call_statement();
+				call_statement(); // returns token
 				break;
 
 			case return_tk:
-				return_statement();
+				return_statement(); // returns token
 				break;
 
 			case input_tk:
-				input_statement();
+				input_statement(); // returns token
 				break;
 
 			case print_tk:
-				print_statement();
+				print_statement(); // returns token
 				break;
 
 			default:
@@ -481,50 +519,48 @@ private:
 		}
 	}
 
-	void assign_statement() {
+	void assign_statement() { // returns token
 		token = lex.get_token();
 		if (token != assign_tk)
 			throw CompilationException("Assignment symbol is expected.");
 
-		expression();
+		token = lex.get_token();
+		expression(); // returns token
 	}
 
-	void if_statement() {
+	void if_statement() { // returns token
 		token = lex.get_token();
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the if keyword.");
 
-		condition();
+		condition(); // returns token
 
-		token = lex.get_token();
 		if (token != rpar_tk)
 			throw CompilationException("A right parenthesis is expected after the condition.");
 
-		statements();
-		else_part();
+		statements(); // returns token
+		else_part(); // returns token
 	}
 
-	void else_part() {
+	void else_part() { // returns token
 		if (token == else_tk) {
-			statements();
+			statements(); // returns token
 		}
 	}
 
-	void while_statement() {
+	void while_statement() { // returns token
 		token = lex.get_token();
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the while keyword.");
 
-		condition();
-
-		token = lex.get_token();
+		condition(); // returns token
 		if (token != rpar_tk)
-			throw CompilationException("A right parenthesis is expected after the condition.");
+			throw CompilationException("A right parenthesis is expected after the while condition.");
 
-		statements();
+		statements(); // returns token
 	}
 
-	void switchcase_statement() {
+	void switchcase_statement() { // returns token
 		token = lex.get_token();
 		while (token == case_tk) {
 			token = lex.get_token();
@@ -533,10 +569,10 @@ private:
 		if (token != default_tk)
 			throw CompilationException("Default handling is always required in a switchcase.");
 
-		statements();
+		statements(); // returns token
 	}
 
-	void forcase_statement() {
+	void forcase_statement() { // returns token
 		token = lex.get_token();
 		while (token == forcase_tk) {
 			token = lex.get_token();
@@ -545,19 +581,19 @@ private:
 		if (token != default_tk)
 			throw CompilationException("Default handling is always required in a forcase.");
 
-		statements();
+		statements(); // returns token
 	}
 
-	void incase_statement() {
+	void incase_statement() { // returns token
 		token = lex.get_token();
-		while (token == forcase_tk) {
+		while (token == incase_tk) {
 			token = lex.get_token();
 		}
 
-		statements();
+		statements(); // returns token
 	}
 
-	void call_statement() {
+	void call_statement() { // returns token
 		token = lex.get_token();
 		if (token != str_tk)
 			throw CompilationException("An ID is expected after the call keyword.");
@@ -566,11 +602,12 @@ private:
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the ID.");
 
-		//actual_par_list();
+		actual_par_list(); // returns token
 
-		token = lex.get_token();
 		if (token != rpar_tk)
 			throw CompilationException("A right parenthesis is expected after the parameter list.");
+
+		token = lex.get_token();
 	}
 
 	void return_statement() {
@@ -578,14 +615,10 @@ private:
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the return keyword.");
 
-		expression();
-
-		token = lex.get_token();
-		if (token != rpar_tk)
-			throw CompilationException("A right parenthesis is expected after the return expression.");
+		expression(); // returns token
 	}
 
-	void input_statement() {
+	void input_statement() { // returns token
 		token = lex.get_token();
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the input keyword.");
@@ -598,22 +631,18 @@ private:
 		if (token != rpar_tk)
 			throw CompilationException("A right parenthesis is expected after the input parameter.");
 
+		token = lex.get_token();
 	}
 
-	void print_statement() {
+	void print_statement() { // returns token
 		token = lex.get_token();
 		if (token != lpar_tk)
 			throw CompilationException("A left parenthesis is expected after the print keyword.");
 
-		expression();
-
-		token = lex.get_token();
-		if (token != rpar_tk)
-			throw CompilationException("A right parenthesis is expected after the print expression.");
-
+		expression(); // returns token
 	}
 
-	void actual_par_list() {
+	void actual_par_list() { // returns token
 		if (token == in_tk || token == inout_tk) {
 			actual_par_item();
 
@@ -623,7 +652,7 @@ private:
 				if (token != in_tk && token != inout_tk)
 					throw CompilationException("in or inout keyword is expected before each parameter.");
 
-				actual_par_item();
+				actual_par_item(); // does not return token
 
 				token = lex.get_token();
 			}
@@ -641,28 +670,73 @@ private:
 		}
 	}
 
-	void condition() {
+	void condition() { // returns token
+		bool_term(); // returns token
 
+		while (token == or_tk) {
+			bool_term(); // returns token
+		}
 	}
 
-	void statements() {
+	void bool_term() { // returns token
+		bool_factor(); // returns token
+
+		while (token == and_tk) {
+			bool_factor(); // returns token
+		}
+	}
+
+	void bool_factor() { // returns token
+		token = lex.get_token();
+		if (token == not_tk) {
+			token = lex.get_token();
+			if (token != lsqbr_tk)
+				throw CompilationException("Left square bracket is expected after the not keyword.");
+
+			condition(); // returns token
+
+			if (token != rsqbr_tk)
+				throw CompilationException("Right square bracket is expected after the condition.");
+
+			token = lex.get_token();
+		}
+		else if (token == lsqbr_tk) { // returns token
+			condition(); // returns token
+
+			if (token != rsqbr_tk)
+				throw CompilationException("Right square bracket is expected after the condition.");
+
+			token = lex.get_token();
+		}
+		else { // returns token
+			expression(); // returns token
+
+			if (!lex.is_rel_op(token))
+				throw CompilationException("A relational operator is expected between expressions.");
+			
+			token = lex.get_token();
+			expression(); // returns token
+		}
+	}
+
+	void statements() { // returns token
+		token = lex.get_token();
 		if (token == lbr_tk) {
 			token = lex.get_token();
-
-			statement();
-
-			token = lex.get_token();
+			statement(); // returns token
 			while (token == semicolon_tk) {
 				token = lex.get_token();
-				statement();
-
-				token = lex.get_token();
+				statement(); // returns token
 			}
-		}
-		else {
-			statement();
+
+			if (token != rbr_tk)
+				throw CompilationException("A group of statements must end with a semi-colon.");
 
 			token = lex.get_token();
+		}
+		else {
+			statement(); // returns token
+
 			if (token != semicolon_tk)
 				throw CompilationException("A statement must be followed by a semi-colon.");
 
@@ -670,67 +744,74 @@ private:
 		}
 	}
 
-	void expression() {
-		token = lex.get_token();
+	void expression() { // returns token
 		optional_sign();
-		term();
+		term(); // returns token
 
-		while (token == plus_tk || token == minus_tk) {
+		while (lex.is_add_op(token)) {
 			token = lex.get_token();
-			term();
-
-			token = lex.get_token();
+			term(); // returns token
 		}
 	}
 
 	void optional_sign() {
-		if (token == plus_tk || token == minus_tk) {
+		if (lex.is_add_op(token)) {
 			token = lex.get_token();
 		}
 	}
 
-	void term() {
-		factor();
+	void term() { // returns token
+		factor(); // returns token
 
-		token = lex.get_token();
-		while (token == star_tk || token == slash_tk) {
+		while (lex.is_mul_op(token)) {
 			token = lex.get_token();
-			factor();
-
-			token = lex.get_token();
+			factor(); // returns token
 		}
 	}
 
-	void factor() {
-		if (token == num_tk) {
+	void factor() { // returns token
+		if (token == num_tk) { // returns token
 			token = lex.get_token();
+			return;
 		}
-		else if (token == lpar_tk) {
+
+		if (token == lpar_tk) { // returns token
+			token = lex.get_token();
+
 			expression();
 
 			if (token != rpar_tk)
 				throw CompilationException("A right parenthesis is expected after an expression.");
+			
+			token = lex.get_token();
+
+			return;
 		}
-		else if (token == str_tk) {
-			id_tail();
+
+		if (token == str_tk) { // returns token
+			id_tail(); // returns token
+			return;
 		}
-		else
-			throw CompilationException("Something went wrong!");
+
+		throw CompilationException("Syntax error on factorial expression.");
 	}
 
-	void id_tail() {
+	void id_tail() { // returns token
 		token = lex.get_token();
 		if (token == lpar_tk) {
 			token = lex.get_token();
-			actual_par_list();
+			actual_par_list(); // returns token
 
 			if(token != rpar_tk)
 				throw CompilationException("A right parenthesis is expected after the parameters.");
+
+			token = lex.get_token();
 		}
 	}
 
 	void end() {
-
+		if (token != end_tk)
+			throw CompilationException("A program must end with a dot.");
 	}
 
 public:
@@ -743,7 +824,7 @@ public:
 		}
 		catch (CompilationException& ex)
 		{
-			cout << ex.what() << endl;
+			cout << "Line " << lex.get_line() << ": " << ex.what() << endl;
 			success = false;
 		}
 
@@ -753,22 +834,26 @@ public:
 
 int main(int argc, char* argv[])
 {
-	cout << "######################################\n";
-	cout << "###  Welcome to C-imple compliler  ###\n";
-	cout << "######################################\n";
+	cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+	cout << "+++                  Welcome to C-imple compliler                  +++\n";
+	cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+	string fileName;
 
-	if (argc > 1) {
+	if (argc > 2) {
 		cout << "C-imple can only support 1 file as argument. Please try again!";
 		return -1;
 	}
-	else if (argc == 1) {
-
+	else if (argc == 2) {
+		fileName = argv[1];
 	}
 	else {
-
+		cout << "Please select the .ci file to be compiled." << endl;
+		cin >> fileName;
 	}
 
-	string fileName = "test.txt";
+	if (!is_valid_file(fileName))
+		return -1;
+
 	FILE* input = fopen(fileName.c_str(), "r");
 	if (input == nullptr) {
 		cout << "Error opening the file.";
@@ -782,16 +867,35 @@ int main(int argc, char* argv[])
 	fclose(input);
 
 	if (!success) {
-		cout << "######################################\n";
-		cout << "########  Compilation Failed  ########\n";
-		cout << "######################################\n";
+		cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+		cout << "+++                       Compilation Failed                       +++\n";
+		cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
 
 		return -1;
 	}
 
-	cout << "######################################\n";
-	cout << "#######  Compilation Succeded  #######\n";
-	cout << "######################################\n";
+	cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+	cout << "+++                      Compilation Succeded                      +++\n";
+	cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
 
 	return 0;
+}
+
+bool is_valid_file(string fileName) {
+	string delimiter = ".";
+
+	size_t pos = fileName.find(delimiter);
+	if (pos == string::npos) {
+		cout << "File name is invalid." << endl;
+		return false;
+	}
+
+	fileName.erase(0, pos + delimiter.length());
+
+	if (fileName != "ci") {
+		cout << "File type was invalid. Only .ci files are allowed.";
+		return false;
+	}
+
+	return true;
 }
